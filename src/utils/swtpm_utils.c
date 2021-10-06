@@ -418,6 +418,19 @@ gchar *str_replace(const char *in, const char *torep, const char *rep)
     return res;
 }
 
+/* find a string in a NULL-terminated array of strings and return the index, -1 otherwise */
+int strv_find(gchar **str_array, const char *tofind)
+{
+    int i = 0;
+
+    while (str_array[i]) {
+        if (!strcmp(str_array[i], tofind))
+            return i;
+        i++;
+    }
+    return -1;
+}
+
 int check_directory_access(const gchar *directory, int mode, const struct passwd *curr_user)
 {
     struct stat statbuf;

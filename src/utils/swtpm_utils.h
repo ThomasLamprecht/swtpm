@@ -32,6 +32,7 @@ ssize_t memconcat(unsigned char **buffer, ...);
 gchar *resolve_string(const gchar *inp);
 gchar *print_as_hex(unsigned char *input, size_t input_len);
 gchar **split_cmdline(const gchar *cmdline);
+int strv_find(gchar **str_array, const char *tofind);
 
 int read_file(const gchar *filename, gchar **buffer, gsize *buffer_len);
 int read_file_lines(const char *filename, gchar ***config_file_lines);
