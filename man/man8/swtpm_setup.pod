@@ -195,6 +195,7 @@ The output may contain the following:
         "cmdarg-keyfile-fd",
         "cmdarg-pwdfile-fd",
         "cmdarg-write-ek-cert-files",
+        "cmdarg-create-config-files",
         "tpm2-rsa-keysize-2048",
         "tpm2-rsa-keysize-3072",
         "tpm12-not-need-root",
@@ -220,7 +221,11 @@ The I<--pwdfile-fd> option is supported.
 
 =item B<cmdarg-write-ek-cert-files>
 
-The I<--write-ek-cert-files> option is supported
+The I<--write-ek-cert-files> option is supported.
+
+=item B<cmdarg-create-config-files>
+
+The I<--create-config-files> option is supported.
 
 =item B<tpm2-rsa-keysize-2048, ...>
 
