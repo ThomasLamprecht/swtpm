@@ -62,8 +62,11 @@ gchar *get_config_value(gchar **config_file_lines, const gchar *configname)
  * @root_flag: TRUE:  create the config files under root's home
  *                    directory shadowing any existing config files in /etc/
  *             FALSE: refuse to create config files as root
+ * @skip_if_exist: TRUE  if any one config files exists return with no error
+ *
  */
-int create_config_files(gboolean overwrite, gboolean root_flag)
+int create_config_files(gboolean overwrite, gboolean root_flag,
+                        gboolean skip_if_exist)
 {
     enum {
         SWTPM_SETUP_CONF = 0,
@@ -113,8 +116,12 @@ int create_config_files(gboolean overwrite, gboolean root_flag)
         configfiles[i] = g_strjoin(G_DIR_SEPARATOR_S, directory, filenames[i],
                                    NULL);
         if (!overwrite && g_file_test(configfiles[i], G_FILE_TEST_EXISTS)) {
-            fprintf(stderr, "File %s already exists. Refusing to overwrite.\n",
-                    configfiles[i]);
+            if (skip_if_exist) {
+                ret = 0;
+            } else {
+                fprintf(stderr, "File %s already exists. Refusing to overwrite.\n",
+                        configfiles[i]);
+            }
             goto out;
         }
     }
