@@ -896,6 +896,8 @@ static void usage(const char *prgname)
 "-i                    : do a hardware TPM_Init; if volatile state is found,\n"
 "                        it will resume the TPM with it and delete it\n"
 "                        afterwards\n"
+"--incoming-migration  : with -i, indicate that the state blobs were loaded\n"
+"                        for an incoming migration\n"
 "--stop                : stop the TPM without exiting\n"
 "-s                    : shutdown the TPM; stops and exits\n"
 "-e                    : get the tpmEstablished bit\n"
@@ -946,6 +948,7 @@ int main(int argc, char *argv[])
         {"unix", required_argument, NULL, 'U'},
         {"c", no_argument, NULL, 'c'},
         {"i", no_argument, NULL, 'i'},
+        {"incoming-migration", no_argument, NULL, 'm'},
         {"stop", no_argument, NULL, 't'},
         {"s", no_argument, NULL, 's'},
         {"e", no_argument, NULL, 'e'},
@@ -974,6 +977,7 @@ int main(int argc, char *argv[])
     unsigned int tcp_port = 0;
     unsigned int retries = 0;
     bool is_chardev;
+    bool incoming_migration = false;
     unsigned long int info_flags = 0;
     char *endptr = NULL;
     int ret = EXIT_FAILURE;
@@ -996,6 +1000,9 @@ int main(int argc, char *argv[])
             break;
         case 'U':
             unix_path = optarg;
+            break;
+        case 'm':
+            incoming_migration = true;
             break;
         case 'c':
         case 'i':
@@ -1142,8 +1149,10 @@ int main(int argc, char *argv[])
         }
         printf("ptm capability is 0x%x\n", caps);
     } else if (!strcmp(command, "-i")) {
-        init.u.req.init_flags = htodev32(is_chardev,
-                                         PTM_INIT_FLAG_DELETE_VOLATILE);
+        init.u.req.init_flags = PTM_INIT_FLAG_DELETE_VOLATILE;
+        if (incoming_migration)
+            init.u.req.init_flags |= PTM_INIT_FLAG_INCOMING_MIGRATION;
+        init.u.req.init_flags = htodev32(is_chardev, init.u.req.init_flags);
         n = ctrlcmd(fd, PTM_INIT, &init, sizeof(init.u.req),
                     sizeof(init.u.resp));
         if (n < 0) {

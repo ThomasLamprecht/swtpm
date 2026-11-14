@@ -48,6 +48,12 @@ Send a hardware initialization signal to the swtpm_cuse/swtpm. Volatile
 state previously written by the TPM will be read and the file automatically
 deleted.
 
+=item B<--incoming-migration>
+
+Use together with I<-i> after loading the state blobs for an incoming migration.
+swtpm then does not automatically send a TPM2_Shutdown() when it is shut down or
+terminated, until it processes a TPM command or the I<--lock-storage> command.
+
 =item B<-s>
 
 Initiate a graceful shut down.
