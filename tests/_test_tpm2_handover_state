@@ -4,8 +4,9 @@
 #set -x
 
 # Check that shutting down, stopping, terminating, or initializing the TPM again
-# does not modify the stored state after all state blobs were retrieved, unless
-# a TPM command or CMD_LOCK_STORAGE followed.
+# does not modify the stored state after all state blobs were retrieved, or after
+# they were set for an incoming migration, unless a TPM command or
+# CMD_LOCK_STORAGE followed.
 
 ROOT=${abs_top_builddir:-$(pwd)/..}
 TESTDIR=${abs_top_testdir:-$(dirname "$0")}
@@ -33,7 +34,7 @@ trap "cleanup" EXIT
 source "${TESTDIR}/common"
 [ "${SWTPM_INTERFACE}" == "cuse" ] && source "${TESTDIR}/test_cuse"
 
-function start_tpm2()
+function run_tpm2()
 {
 	TPM_PATH=$TPM_PATH run_swtpm "${SWTPM_INTERFACE}" --tpm2
 
@@ -41,11 +42,21 @@ function start_tpm2()
 		echo "Error: ${SWTPM_INTERFACE} TPM did not start."
 		exit 1
 	fi
+}
 
-	if ! run_swtpm_ioctl "${SWTPM_INTERFACE}" -i; then
+# Initialize the TPM, passing the given options to swtpm_ioctl -i
+function init_tpm()
+{
+	if ! run_swtpm_ioctl "${SWTPM_INTERFACE}" -i "$@"; then
 		echo "Error: Could not initialize the ${SWTPM_INTERFACE} TPM."
 		exit 1
 	fi
+}
+
+function start_tpm2()
+{
+	run_tpm2
+	init_tpm
 
 	RES=$(swtpm_cmd_tx "${SWTPM_INTERFACE}" '\x80\x01\x00\x00\x00\x0c\x00\x00\x01\x44\x00\x00')
 	exp=' 80 01 00 00 00 0a 00 00 00 00'
@@ -69,6 +80,39 @@ function get_state_blobs()
 			exit 1
 		fi
 	done
+}
+
+# Start a TPM, set the retrieved state blobs and initialize it, passing the given
+# options to swtpm_ioctl -i
+function set_state_blobs()
+{
+	local blobtype
+
+	run_tpm2
+
+	for blobtype in permanent volatile savestate; do
+		if ! run_swtpm_ioctl "${SWTPM_INTERFACE}" \
+			--load "${blobtype}" "${BLOB_PREFIX}.${blobtype}"; then
+			echo "Error: Could not set the ${blobtype} state blob."
+			exit 1
+		fi
+	done
+
+	init_tpm "$@"
+}
+
+# Hand over the state like the source or the target of a migration
+function hand_over_state()
+{
+	case "$1" in
+	source)
+		start_tpm2
+		get_state_blobs
+		;;
+	target)
+		set_state_blobs --incoming-migration
+		;;
+	esac
 }
 
 # End the TPM by the given action
@@ -145,7 +189,7 @@ function tpm2_getrandom()
 	fi
 }
 
-# Sent by QEMU when the VM runs again, e.g. after a snapshot
+# Sent by QEMU when the VM runs after a migration or snapshot
 function lock_storage()
 {
 	if ! run_swtpm_ioctl "${SWTPM_INTERFACE}" --lock-storage 0; then
@@ -158,45 +202,49 @@ function lock_storage()
 ACTIONS="shutdown stop"
 [ "${SWTPM_INTERFACE}" != "cuse" ] && ACTIONS+=" terminate"
 
-for action in ${ACTIONS}; do
-	start_tpm2
-	get_state_blobs
-	if end_tpm_modifies_state "${action}"; then
-		echo "Error: ${action} modified the state after all state blobs were retrieved."
+for role in source target; do
+	for action in ${ACTIONS}; do
+		hand_over_state "${role}"
+		if end_tpm_modifies_state "${action}"; then
+			echo "Error: ${action} by the ${role} modified the handed over state."
+			exit 1
+		fi
+
+		hand_over_state "${role}"
+		tpm2_getrandom
+		if ! end_tpm_modifies_state "${action}"; then
+			echo "Error: ${action} by the ${role} did not modify the state after a TPM command."
+			exit 1
+		fi
+	done
+
+	hand_over_state "${role}"
+	if init_tpm_modifies_state; then
+		echo "Error: init by the ${role} modified the handed over state."
 		exit 1
 	fi
+	end_tpm_modifies_state shutdown || true
 
-	start_tpm2
-	get_state_blobs
+	hand_over_state "${role}"
 	tpm2_getrandom
-	if ! end_tpm_modifies_state "${action}"; then
-		echo "Error: ${action} did not modify the state after a TPM command."
+	if ! init_tpm_modifies_state; then
+		echo "Error: init by the ${role} did not modify the state after a TPM command."
+		exit 1
+	fi
+	end_tpm_modifies_state shutdown || true
+
+	hand_over_state "${role}"
+	lock_storage
+	if ! end_tpm_modifies_state shutdown; then
+		echo "Error: shutdown by the ${role} did not modify the state after CMD_LOCK_STORAGE."
 		exit 1
 	fi
 done
 
-start_tpm2
-get_state_blobs
-if init_tpm_modifies_state; then
-	echo "Error: init modified the state after all state blobs were retrieved."
-	exit 1
-fi
-end_tpm_modifies_state shutdown || true
-
-start_tpm2
-get_state_blobs
-tpm2_getrandom
-if ! init_tpm_modifies_state; then
-	echo "Error: init did not modify the state after a TPM command."
-	exit 1
-fi
-end_tpm_modifies_state shutdown || true
-
-start_tpm2
-get_state_blobs
-lock_storage
+# Without the incoming migration flag, the target keeps the automatic TPM2_Shutdown
+set_state_blobs
 if ! end_tpm_modifies_state shutdown; then
-	echo "Error: shutdown did not modify the state after CMD_LOCK_STORAGE."
+	echo "Error: shutdown by the target did not modify the state without the incoming migration flag."
 	exit 1
 fi
 
