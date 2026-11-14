@@ -124,7 +124,7 @@ static uint32_t g_lastCommand = TPM_ORDINAL_NONE;
 /* TPM2_Shutdown() will NOT be sent by swtpm */
 static bool g_disable_auto_shutdown = false;
 
-/* state handed over, TPM not used since */
+/* state handed over or received, TPM not used since */
 static bool g_state_not_owned;
 
 /* whether to defer locking NVRAM storage due to incoming migration */
@@ -1255,10 +1255,13 @@ static void ptm_ioctl(fuse_req_t req, int cmd, void *arg,
                 tpm_running = true;
                 SWTPM_G_FREE(g_json_profile);
                 /*
-                 * cleared only once the TPM uses the state it loaded, so
-                 * tpm_end() above leaves a handed-over state alone
+                 * updated only once the TPM uses the state it loaded, so
+                 * tpm_end() above leaves a handed-over state alone; with an
+                 * incoming migration, the source may still use the state
+                 * until the VM runs
                  */
-                g_state_not_owned = false;
+                g_state_not_owned = init_p->u.req.init_flags &
+                                    PTM_INIT_FLAG_INCOMING_MIGRATION;
             }
             init_p->u.resp.tpm_result = res;
             fuse_reply_ioctl(req, 0, init_p, sizeof(*init_p));
@@ -1524,7 +1527,7 @@ static void ptm_ioctl(fuse_req_t req, int cmd, void *arg,
                 out_pls.u.resp.tpm_result = TPM_FAIL;
             } else {
                 out_pls.u.resp.tpm_result = TPM_SUCCESS;
-                /* sent by QEMU when the VM runs again after the handover */
+                /* sent by QEMU when the VM runs after a migration or snapshot */
                 g_state_not_owned = false;
                 /*
                  * a cached blob gets stale once the TPM runs again, and only

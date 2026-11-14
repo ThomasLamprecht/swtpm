@@ -651,10 +651,13 @@ int ctrlchannel_process_fd(int fd,
             *tpm_running = true;
             SWTPM_G_FREE(mlp->json_profile);
             /*
-             * cleared only once the TPM uses the state it loaded, so the
-             * shutdown above leaves a handed-over state alone
+             * updated only once the TPM uses the state it loaded, so the
+             * shutdown above leaves a handed-over state alone; with an
+             * incoming migration, the source may still use the state until
+             * the VM runs
              */
-            mlp->state_not_owned = false;
+            mlp->state_not_owned = be32toh(init_p->u.req.init_flags) &
+                                   PTM_INIT_FLAG_INCOMING_MIGRATION;
         }
 
         *res_p = htobe32(res);
@@ -983,7 +986,7 @@ int ctrlchannel_process_fd(int fd,
             pls->u.resp.tpm_result = htobe32(TPM_FAIL);
         } else {
             pls->u.resp.tpm_result = htobe32(TPM_SUCCESS);
-            /* sent by QEMU when the VM runs again after handing over the state */
+            /* sent by QEMU when the VM runs after a migration or snapshot */
             mlp->state_not_owned = false;
         }
 

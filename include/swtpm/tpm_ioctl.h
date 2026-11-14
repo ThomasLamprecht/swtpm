@@ -83,6 +83,11 @@ struct ptm_init {
 /* above init_flags */
 #define PTM_INIT_FLAG_DELETE_VOLATILE (1 << 0)
     /* delete volatile state file after reading it */
+#define PTM_INIT_FLAG_INCOMING_MIGRATION (1 << 1)
+    /*
+     * state blobs were set by an incoming migration, the client sends
+     * PTM_LOCK_STORAGE once it uses the TPM
+     */
 
 /* PTM_SET_LOCALITY */
 struct ptm_loc {

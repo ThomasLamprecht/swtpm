@@ -136,6 +136,14 @@ The ptm_init data structure looks as follows:
 The init_flags field in the request can be used to have the TPM
 delete the volatile state upon startup (B<PTM_INIT_FLAG_DELETE_VOLATILE>).
 
+A client that set the state blobs for an incoming migration can set
+B<PTM_INIT_FLAG_INCOMING_MIGRATION> (since v0.11) and then sends
+B<PTM_LOCK_STORAGE> once it uses the TPM, for example when the VM starts
+running. Until then, or until the next TPM command, swtpm does not
+automatically send a TPM2_Shutdown(), for example on B<PTM_SHUTDOWN> or when
+terminating, so that a failed migration does not modify the state that the
+migration source continues to use.
+
 A TPM result code is returned in the tpm_result field.
 
 =item B<PTM_SHUTDOWN / CMD_SHUTDOWN, ptm_res>
